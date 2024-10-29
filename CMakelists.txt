@@ -1,0 +1,96 @@
+# ZipArchive static library setup
+cmake_minimum_required(VERSION 3.18)
+project(ZipArchive)
+
+# Define source files
+set(ZIPARCHIVE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/SSZipArchive.m
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_compat.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_crypt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_crypt_apple.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_os.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_os_posix.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_buf.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_mem.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_os_posix.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_pkcrypt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_split.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_wzaes.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_zlib.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_zip.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_zip_rw.c
+)
+
+# Define header files
+set(ZIPARCHIVE_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/SSZipArchive.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/SSZipCommon.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/include/ZipArchive.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_compat.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_crypt.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_os.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_buf.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_mem.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_os.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_pkcrypt.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_split.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_wzaes.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_strm_zlib.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_zip.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip/mz_zip_rw.h
+)
+
+# Create static library target
+add_library(${PROJECT_NAME} STATIC ${ZIPARCHIVE_SOURCES} ${ZIPARCHIVE_HEADERS})
+
+# Set compile definitions and options
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    HAVE_ZLIB
+    ZLIB_COMPAT
+    USE_ZLIB
+    _POSIX_C_SOURCE=200112L
+    HAVE_INTTYPES_H
+    HAVE_PKCRYPT
+    HAVE_STDINT_H
+    HAVE_WZAES
+    HAVE_ZLIB
+)
+
+target_compile_options(${PROJECT_NAME} PRIVATE
+    -fobjc-arc
+    -Wno-implicit-function-declaration
+    -Wno-deprecated-declarations
+    -Wno-incompatible-pointer-types
+)
+
+# Set up include directories
+target_include_directories(${PROJECT_NAME} PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/minizip
+    ${CMAKE_CURRENT_SOURCE_DIR}/SSZipArchive/include
+    ${FISSION_AXMOL_PATH}/thirdparty/zlib/include
+    ${CMAKE_OSX_SYSROOT}/usr/include
+)
+
+# Link with required libraries
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    "-framework Security"
+    "-framework Foundation"
+    "${CMAKE_OSX_SYSROOT}/usr/lib/libz.tbd"
+    iconv
+)
+
+# Set iOS-specific properties
+if(IOS)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        XCODE_ATTRIBUTE_SDKROOT iphoneos
+        XCODE_ATTRIBUTE_SKIP_INSTALL YES
+        XCODE_ATTRIBUTE_ENABLE_BITCODE NO
+        XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES
+        XCODE_ATTRIBUTE_GCC_PREPROCESSOR_DEFINITIONS "HAVE_ZLIB=1 ZLIB_COMPAT=1 USE_ZLIB=1"
+    )
+endif()
