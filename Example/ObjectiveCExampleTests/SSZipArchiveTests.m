@@ -264,6 +264,7 @@ int twentyMB = 20 * 1024 * 1024;
     
     NSError *error = nil;
     id<SSZipArchiveDelegate> delegate = [ProgressDelegate new];
+    // correct password is "passw0rd", so "passw0rd123" should be incorrect
     BOOL success = [SSZipArchive unzipFileAtPath:zipPath toDestination:outputPath overwrite:YES password:@"passw0rd123" error:&error delegate:delegate];
     XCTAssertFalse(success, @"unzip failure");
     
@@ -275,6 +276,21 @@ int twentyMB = 20 * 1024 * 1024;
     XCTAssertFalse([fileManager fileExistsAtPath:testPath], @"LICENSE not unzipped");
 }
 
+- (void)testUnzippingWithInvalidPassword2 {
+    XCTSkip("https://github.com/ZipArchive/ZipArchive/issues/633");
+    NSString *zipPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"TestPasswordArchive2" ofType:@"zip"];
+    NSString *outputPath = [self _cachesPath:@"Password"];
+    
+    NSError *error = nil;
+    id<SSZipArchiveDelegate> delegate = [ProgressDelegate new];
+    // correct password is "aaabbb", so "1989" should be incorrect
+    BOOL success = [SSZipArchive unzipFileAtPath:zipPath toDestination:outputPath overwrite:YES password:@"1989" error:&error delegate:delegate];
+    XCTAssertFalse(success, @"unzip failure");
+    
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSString *testPath = [outputPath stringByAppendingPathComponent:@"test.txt"];
+    XCTAssertFalse([fileManager fileExistsAtPath:testPath], @"test.txt not unzipped");
+}
 
 - (void)testIsPasswordInvalidForArchiveAtPath {
     NSString *zipPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"TestPasswordArchive" ofType:@"zip"];
@@ -288,6 +304,28 @@ int twentyMB = 20 * 1024 * 1024;
     BOOL fileHasInvalidValidPassword = [SSZipArchive isPasswordValidForArchiveAtPath:zipPath password:@"passw0rd123" error:&error];
     
     XCTAssertFalse(fileHasInvalidValidPassword, @"Invalid password reports true.");
+}
+
+- (void)testIsPasswordInvalidForArchiveAtPath2 {
+    XCTSkip("https://github.com/ZipArchive/ZipArchive/issues/633");
+    NSString *zipPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"TestPasswordArchive2" ofType:@"zip"];
+
+    NSError *error = nil;
+
+    BOOL fileHasValidPassword = [SSZipArchive isPasswordValidForArchiveAtPath:zipPath password:@"aaabbb" error:&error];
+
+    XCTAssertTrue(fileHasValidPassword, @"Valid password reports false.");
+
+    BOOL fileHasInvalidValidPassword = [SSZipArchive isPasswordValidForArchiveAtPath:zipPath password:@"1989" error:&error];
+
+    XCTAssertFalse(fileHasInvalidValidPassword, @"Invalid password reports true.");
+}
+
+- (void)testIsPasswordValidForDirectory {
+    NSString *zipPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"PasswordArchiveWithFolder" ofType:@"zip"];
+
+    BOOL fileHasValidPassword = [SSZipArchive isPasswordValidForArchiveAtPath:zipPath password:@"passw0rd" error:nil];
+    XCTAssertTrue(fileHasValidPassword, @"is Password Valid");
 }
 
 - (void)testIsFilePasswordProtectedAtPath {
@@ -467,6 +505,17 @@ int twentyMB = 20 * 1024 * 1024;
     XCTAssert(fileSize < fileSize2, @"keepParentDirectory should produce a strictly bigger archive.");
 }
 
+/// <https://github.com/ZipArchive/ZipArchive/issues/621>
+- (void)testZippingNonDirectoryWithContentsOfDirectory {
+    NSString *inputPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"TestArchive" ofType:@"zip"];
+    NSString *outputPath = [self _cachesPath:@"ZippingNonDirectory"];
+    NSString *zipPath = [outputPath stringByAppendingPathComponent:@"ZippingNonDirectory.zip"];
+
+    BOOL success = [SSZipArchive createZipFileAtPath:zipPath withContentsOfDirectory:inputPath];
+    XCTAssertTrue(!success, @"create zip success");
+}
+
+/// Using `keepParentDirectory:YES`
 - (void)testZippingAndUnzippingEmptyDirectoryWithPassword {
     
     NSString *inputPath = [self _cachesPath:@"Empty"];
@@ -477,12 +526,43 @@ int twentyMB = 20 * 1024 * 1024;
     BOOL success = [SSZipArchive createZipFileAtPath:zipPath withContentsOfDirectory:inputPath keepParentDirectory:YES withPassword:@"password"];
     XCTAssertTrue(success, @"create zip failure");
     
-    outputPath = [self _cachesPath:@"EmptyDirectory"];
+    outputPath = [self _cachesPath:@"EmptyOutput"];
     
     // unzipping a directory doesn't require a password
     id<SSZipArchiveDelegate> delegate = [ProgressDelegate new];
     success = [SSZipArchive unzipFileAtPath:zipPath toDestination:outputPath overwrite:YES password:nil error:nil delegate:delegate];
     XCTAssertTrue(success, @"unzip failure");
+
+    NSString *emptyPath = [outputPath stringByAppendingPathComponent:@"Empty"];
+    BOOL isDirectory;
+    XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:emptyPath isDirectory:&isDirectory], @"Empty unzipped");
+    XCTAssertTrue(isDirectory, @"Empty is a directory");
+}
+
+/// Using `withFilesAtPaths:`
+- (void)testZippingAndUnzippingEmptyDirectoryWithFilesAtPaths {
+
+    NSString *inputPath = [self _cachesPath:@"EmptyWithSubdirectory"];
+    NSString *emptySubdirectory = [inputPath stringByAppendingPathComponent:@"Empty"];
+    BOOL success = [[NSFileManager defaultManager] createDirectoryAtPath:emptySubdirectory withIntermediateDirectories:YES attributes:nil error:NULL];
+    XCTAssertTrue(success, @"create folder failure");
+
+    // zipping files
+    NSString *outputPath = [self _cachesPath:@"Zipped"];
+    NSString *zipPath = [outputPath stringByAppendingPathComponent:@"EmptyWithSubdirectory.zip"];
+    success = [SSZipArchive createZipFileAtPath:zipPath withFilesAtPaths:@[emptySubdirectory]];
+    XCTAssertTrue(success, @"create zip failure");
+
+    // unzipping files
+    outputPath = [self _cachesPath:@"EmptyWithSubdirectoryOutput"];
+    id<SSZipArchiveDelegate> delegate = [ProgressDelegate new];
+    success = [SSZipArchive unzipFileAtPath:zipPath toDestination:outputPath overwrite:YES password:nil error:nil delegate:delegate];
+    XCTAssertTrue(success, @"unzip failure");
+
+    NSString *emptyPath = [outputPath stringByAppendingPathComponent:@"Empty"];
+    BOOL isDirectory;
+    XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:emptyPath isDirectory:&isDirectory], @"Empty unzipped");
+    XCTAssertTrue(isDirectory, @"Empty is a directory");
 }
 
 - (void)testUnzippingEmptyArchive {
@@ -592,14 +672,14 @@ int twentyMB = 20 * 1024 * 1024;
 // `LargeArchive.zip` to the project and uncomment out these lines to test.
 //
 //- (void)testUnzippingLargeFiles {
-//	NSString *zipPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"LargeArchive" ofType:@"zip"];
-//	NSString *outputPath = [self _cachesPath:@"Large"];
+//    NSString *zipPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"LargeArchive" ofType:@"zip"];
+//    NSString *outputPath = [self _cachesPath:@"Large"];
 //
-//  BOOL success = [SSZipArchive unzipFileAtPath:zipPath toDestination:outputPath];
-//  XCTAssertTrue(success, @"unzip failure");
+//    BOOL success = [SSZipArchive unzipFileAtPath:zipPath toDestination:outputPath];
+//    XCTAssertTrue(success, @"unzip failure");
 //}
 
--(void)testShouldProvidePathOfUnzippedFileInDelegateCallback {
+- (void)testShouldProvidePathOfUnzippedFileInDelegateCallback {
     CollectingDelegate *collector = [CollectingDelegate new];
     NSString *zipPath = [[NSBundle bundleForClass:[self class]] pathForResource:@"TestArchive" ofType:@"zip"];
     NSString *outputPath = [self _cachesPath:@"Regular"];
@@ -692,7 +772,6 @@ int twentyMB = 20 * 1024 * 1024;
     XCTAssertTrue(iterations == noFiles, "All files should be present in the exported directory");
 }
 
-//PR #560
 - (void)testSymlinkZippingWithFilesAtPaths {
     NSString *outputDir = [self _cachesPath:@"ZippingSymlinkWithFilesAtPaths"];
 
@@ -738,7 +817,6 @@ int twentyMB = 20 * 1024 * 1024;
     XCTAssertEqualObjects(realFilePath, realFilePathUnzip);
 }
 
-//PR #560
 - (void)testSymlinkZippingWithContentsOfDirectory {
     NSString *outputDir = [self _cachesPath:@"ZippingSymlinkWithContentsOfDirectory"];
 
@@ -811,7 +889,8 @@ int twentyMB = 20 * 1024 * 1024;
         path = [path stringByAppendingPathComponent:directory];
     }
 
-    [[NSFileManager defaultManager] createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
+    BOOL success = [[NSFileManager defaultManager] createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
+    XCTAssertTrue(success, @"%@", path);
 
     return path;
 }
